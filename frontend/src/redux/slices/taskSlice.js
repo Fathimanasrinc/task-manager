@@ -10,92 +10,117 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-const tasksCollection = collection(db, "tasks");
+// 🔐 COLLECTION
+const getUserTasksCollection = (userId) =>
+  collection(db, "users", userId, "tasks");
 
 // 📥 FETCH TASKS
 export const fetchTasks = createAsyncThunk(
   "tasks/fetch",
-  async (_, { rejectWithValue }) => {
+  async (userId, { rejectWithValue }) => {
     try {
-      const snapshot = await getDocs(tasksCollection);
+      const snapshot = await getDocs(getUserTasksCollection(userId));
 
-      return snapshot.docs.map((doc) => {
-        const data = doc.data();
+      return snapshot.docs.map((d) => {
+        const data = d.data();
 
         return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate?.().toISOString() || null,
-          updatedAt: data.updatedAt?.toDate?.().toISOString() || null,
+          id: d.id,
+          title: data.title || "",
+          description: data.description || "",
+          status: data.status || "todo",
+
+          // ✅ convert Firestore Timestamp → number
+          createdAt: data.createdAt?.toMillis?.() || null,
+          updatedAt: data.updatedAt?.toMillis?.() || null,
         };
       });
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  },
+  }
 );
 
 // ➕ ADD TASK
 export const addTaskAsync = createAsyncThunk(
   "tasks/add",
-  async (task, { rejectWithValue }) => {
+  async ({ userId, title, description, status }, { rejectWithValue }) => {
     try {
+      const now = Date.now();
+
       const newTask = {
-        title: task.title,
-        description: task.description,
-        status: task.status || "todo",
+        title: title || "",
+        description: description || "",
+        status: status || "todo",
+
+        // ✅ store as Timestamp in Firestore
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
-      const docRef = await addDoc(tasksCollection, newTask);
+      const docRef = await addDoc(getUserTasksCollection(userId), newTask);
 
       return {
         id: docRef.id,
-        ...newTask,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+
+        // ✅ store serializable values in Redux
+        title: newTask.title,
+        description: newTask.description,
+        status: newTask.status,
+        createdAt: now,
+        updatedAt: now,
       };
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  },
+  }
 );
 
 // ❌ DELETE TASK
 export const deleteTaskAsync = createAsyncThunk(
   "tasks/delete",
-  async (id, { rejectWithValue }) => {
+  async ({ userId, id }, { rejectWithValue }) => {
     try {
-      await deleteDoc(doc(db, "tasks", id));
+      await deleteDoc(doc(db, "users", userId, "tasks", id));
       return id;
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  },
+  }
 );
 
-// ✏️ UPDATE TASK (FIXED)
+// ✏️ UPDATE TASK
 export const updateTaskAsync = createAsyncThunk(
-  "tasks/update",
-  async ({ id, ...data }, { rejectWithValue }) => {
+  "tasks/updateTask",
+  async (
+    { userId, taskId, title, description, status },
+    { rejectWithValue }
+  ) => {
     try {
-      const ref = doc(db, "tasks", id);
+      const taskRef = doc(db, "users", userId, "tasks", taskId);
 
-      await updateDoc(ref, {
-        ...data,
+      const updatedData = {
+        title: title || "",
+        description: description || "",
+        status: status || "todo",
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      await updateDoc(taskRef, updatedData);
 
       return {
-        id,
-        ...data,
-        updatedAt: new Date().toISOString(),
+        id: taskId,
+        title: updatedData.title,
+        description: updatedData.description,
+        status: updatedData.status,
+
+        // ✅ Redux-safe timestamp
+        updatedAt: Date.now(),
       };
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  },
+  }
 );
 
 // 🧠 INITIAL STATE
@@ -109,15 +134,19 @@ const initialState = {
 const taskSlice = createSlice({
   name: "tasks",
   initialState,
-  reducers: {},
+  reducers: {
+    clearTasks: (state) => {
+      state.tasks = [];
+      state.loading = false;
+      state.error = null;
+    },
+  },
 
   extraReducers: (builder) => {
     builder
-
-      // 🔄 FETCH
+      // FETCH
       .addCase(fetchTasks.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
       .addCase(fetchTasks.fulfilled, (state, action) => {
         state.loading = false;
@@ -128,30 +157,36 @@ const taskSlice = createSlice({
         state.error = action.payload;
       })
 
-      // ➕ ADD
+      // ADD
       .addCase(addTaskAsync.fulfilled, (state, action) => {
-        const exists = state.tasks.find((t) => t.id === action.payload.id);
-
-        if (!exists) {
-          state.tasks.push(action.payload);
-        }
+        state.tasks.push(action.payload);
       })
-
-      // ❌ DELETE
-      .addCase(deleteTaskAsync.fulfilled, (state, action) => {
-        state.tasks = state.tasks.filter((task) => task.id !== action.payload);
-      })
-      .addCase(deleteTaskAsync.rejected, (state, action) => {
+      .addCase(addTaskAsync.rejected, (state, action) => {
         state.error = action.payload;
       })
 
-      // ✏️ UPDATE (FIXED - NO DUPLICATES)
-      .addCase(updateTaskAsync.fulfilled, (state, action) => {
-        state.tasks = state.tasks.map((task) =>
-          task.id === action.payload.id ? action.payload : task,
+      // DELETE
+      .addCase(deleteTaskAsync.fulfilled, (state, action) => {
+        state.tasks = state.tasks.filter(
+          (task) => task.id !== action.payload
         );
+      })
+
+      // UPDATE
+      .addCase(updateTaskAsync.fulfilled, (state, action) => {
+        const index = state.tasks.findIndex(
+          (task) => task.id === action.payload.id
+        );
+
+        if (index !== -1) {
+          state.tasks[index] = {
+            ...state.tasks[index],
+            ...action.payload,
+          };
+        }
       });
   },
 });
 
+export const { clearTasks } = taskSlice.actions;
 export default taskSlice.reducer;

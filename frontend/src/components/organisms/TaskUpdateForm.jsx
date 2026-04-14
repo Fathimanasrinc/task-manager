@@ -6,10 +6,11 @@ import { Select } from "../atoms/Select";
 import { Button } from "../atoms/Button";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-import { addTaskAsync } from "../../redux/slices/taskSlice";
+import { updateTaskAsync } from "../../redux/slices/taskSlice";
 import { auth } from "../../services/firebase";
 
-export function TaskForm({ onSubmit, initialData = {} }) {
+
+export function TaskUpdateForm({ taskId, initialData = {}, onSubmit }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
@@ -31,7 +32,6 @@ export function TaskForm({ onSubmit, initialData = {} }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // ✅ validation
     if (!form.title.trim()) {
       alert("Task title is required");
       return;
@@ -47,33 +47,24 @@ export function TaskForm({ onSubmit, initialData = {} }) {
     try {
       setLoading(true);
 
-      const userId = user.uid;
-
       const resultAction = await dispatch(
-        addTaskAsync({
-          userId,
+        updateTaskAsync({
+          userId: user.uid,
+          taskId,
           title: form.title,
           description: form.description,
           status: form.status,
         }),
       );
 
-      if (addTaskAsync.fulfilled.match(resultAction)) {
+      if (updateTaskAsync.fulfilled.match(resultAction)) {
         onSubmit?.(form);
-
-        // reset form
-        setForm({
-          title: "",
-          description: "",
-          status: "todo",
-        });
-
         navigate("/dashboard");
       } else {
-        console.error("Failed to add task");
+        console.error("Failed to update task");
       }
     } catch (error) {
-      console.error("Error adding task:", error);
+      console.error("Error updating task:", error);
     } finally {
       setLoading(false);
     }
@@ -115,7 +106,7 @@ export function TaskForm({ onSubmit, initialData = {} }) {
       </FormField>
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Creating..." : "Create Task"}
+        {loading ? "Updating..." : "Update Task"}
       </Button>
     </form>
   );

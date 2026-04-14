@@ -1,39 +1,61 @@
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
-import { TaskForm } from "../components/organisms/TaskForm";
+import { useEffect, useState } from "react";
+
+import { TaskUpdateForm } from "../components/organisms/TaskUpdateForm";
 import { DashboardLayout } from "../components/templates/DashboardLayout";
 import { updateTaskAsync } from "../redux/slices/taskSlice";
+import { auth } from "../services/firebase";
 
 export function EditTask() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // ✅ FIX: access tasks array properly
+  const userId = auth.currentUser?.uid;
+
   const task = useSelector((state) =>
-    state.tasks.tasks.find((t) => t.id === id)
+    state.tasks.tasks.find((t) => t.id === id),
   );
 
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (task) {
+      setLoading(false);
+    }
+  }, [task]);
+
   const handleSubmit = async (updatedData) => {
-    await dispatch(updateTaskAsync({ id, ...updatedData }));
+    if (!userId) {
+      alert("User not logged in");
+      return;
+    }
+
+    await dispatch(
+      updateTaskAsync({
+        userId,
+        id,
+        ...updatedData,
+      }),
+    );
+
     navigate("/dashboard");
   };
 
-  if (!task) {
+  if (loading || !task) {
     return (
       <DashboardLayout>
-        <p className="text-center text-red-500">Task not found</p>
+        <p className="text-center text-gray-500">Loading task...</p>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <h2 className="text-2xl font-bold mb-4 text-[#2a2438]">
-        Edit Task
-      </h2>
+      <h2 className="text-2xl font-bold mb-4 text-[#2a2438]">Edit Task</h2>
 
-      <TaskForm onSubmit={handleSubmit} initialData={task} />
+      <TaskUpdateForm taskId={id} initialData={task} onSubmit={handleSubmit} />
     </DashboardLayout>
   );
 }
