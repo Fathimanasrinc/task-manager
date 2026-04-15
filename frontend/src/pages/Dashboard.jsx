@@ -61,20 +61,38 @@ export function Dashboard() {
     );
   }
 
-  return (
-    <DashboardLayout>
-      <DashboardContent
-        tasks={tasks}
-        onDelete={handleDelete}
-        onEdit={handleEdit}
-      >
+return (
+  <DashboardLayout>
+
+    {/* 🔝 ACTION BAR */}
+    <div className="flex justify-between items-center mb-6 p-3 bg-white/5 rounded-lg backdrop-blur">
+
+      {/* Title */}
+      <h1 className="text-xl font-semibold text-white">
+        Task Dashboard
+      </h1>
+
+      {/* Actions */}
+      <div className="flex gap-3">
+
+        {/* ➕ Add Task */}
         <Button
           onClick={() => navigate("/create")}
           disabled={!userId}
         >
-          Add Task
+          + Add Task
         </Button>
-      </DashboardContent>
-    </DashboardLayout>
-  );
+
+      </div>
+    </div>
+
+    {/* 📋 CONTENT */}
+    <DashboardContent
+      tasks={tasks}
+      onDelete={handleDelete}
+      onEdit={handleEdit}
+    />
+
+  </DashboardLayout>
+);
 }

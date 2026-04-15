@@ -79,11 +79,11 @@ export function TaskForm({ onSubmit, initialData = {} }) {
     }
   };
 
-  const statusOptions = [
-    { value: "todo", label: "Todo" },
-    { value: "inprogress", label: "In Progress" },
-    { value: "done", label: "Done" },
-  ];
+const statusOptions = [
+  { value: "todo", label: "Todo" },
+  { value: "in-progress", label: "In Progress" },
+  { value: "done", label: "Done" },
+];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
